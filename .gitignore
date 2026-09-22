@@ -1,0 +1,19 @@
+# Secrets and local environment
+.env
+.venv/
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+.claude/*.lock
+
+# The agent's own workspace is a separate git repo it commits to.
+workspace/
+
+# Run artifacts: keep the analysis reports, drop raw state DBs, logs and workspaces.
+runs/*/*
+!runs/*/analysis/
+logs/
+analysis/
+!runs/*/analysis/
+state.db*
+backups/

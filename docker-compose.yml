@@ -1,0 +1,16 @@
+services:
+  agent:
+    build: .
+    image: adam-agent
+    env_file: .env          # LLM_API_KEY, LLM_BASE_URL, SEARCH_API_KEY — nothing else
+    volumes:
+      - ./workspace:/workspace   # the agent's home
+      - runner-data:/runner      # state.db, logs, STOP: a real Linux volume (WAL-safe), not visible to the agent
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 512
+    restart: "no"               # a crash must show up as a crash, not get papered over
+    stop_grace_period: 30s      # SIGTERM aborts the current turn cleanly within ~1s
+
+volumes:
+  runner-data:

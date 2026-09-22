@@ -1,0 +1,12 @@
+.venv/
+.env
+.pytest_cache/
+__pycache__/
+**/__pycache__/
+workspace/
+logs/
+analysis/
+state.db*
+tests/
+runs/
+backups/

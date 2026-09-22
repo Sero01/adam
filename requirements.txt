@@ -1,0 +1,4 @@
+openai>=1.60
+httpx>=0.27
+markdownify>=0.13
+pytest>=8

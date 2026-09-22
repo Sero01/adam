@@ -1,0 +1,84 @@
+[llm]
+model = "z-ai/glm-5.3-flash"
+base_url = "https://openrouter.ai/api/v1"   # LLM_BASE_URL env overrides
+thinker_reasoning = "medium"
+hands_reasoning = "low"
+compactor_reasoning = "low"
+judge_reasoning = "low"    # dread judge, see [dread]
+max_output_tokens = 4096
+request_timeout_s = 180
+max_retries = 8            # transient API errors, backoff 2,4,..,60s (~4 min before a call gives up)
+
+# OpenRouter provider routing. The [pricing] numbers below are DeepInfra's rate;
+# other providers of this model cost 1.2-6x more, so routing is restricted to this
+# list (allow_fallbacks=false still falls back *within* the list, verified live).
+# Pinned for P5 after run 3's 41 retries in 14 ticks (live /endpoints, 2026-09-14):
+#   deepinfra/fp4  $0.075/$0.25 (50% promo)  30m uptime 92%, status degraded
+#   streamlake/fp8 $0.112/$0.37              30m uptime 98%
+#   baseten/fp8    $0.15/$0.50               30m uptime 99.8%
+#   z-ai/fp8       $0.15/$0.50               30m uptime 99.1% (first party)
+# Cost uses usage.cost, so it stays exact; llm_calls.provider records who served each call.
+# Ignored when base_url is not OpenRouter.
+[llm.provider]
+order = ["deepinfra/fp4", "streamlake/fp8", "baseten/fp8", "z-ai/fp8"]
+allow_fallbacks = false
+require_parameters = true
+
+[pricing]  # per 1M tokens; used only when the response carries no usage.cost
+input = 0.075
+output = 0.25
+cached_input = 0.015
+
+[budget]
+# The OpenRouter key is limited to $3. The cap must stay below it, or past $3 every call
+# gets 402 and ticks abort instead of a clean "budget" stop. Run 3 projects ~$1.2/24h.
+hard_cap_usd = 2.50
+soft_warn_usd = 2.00
+expose_budget = false
+
+[loop]
+tick_interval_s = 120
+max_sleep_s = 300          # spec default 1800; lowered after P4 run 1 (see SPEC_NOTES.md)
+# Spec default is 600, equal to hands.timeout_s: a single slow hands() call would
+# abort the whole turn. Raised, and hands runs are additionally clamped to the
+# time left in the turn.
+thinker_turn_timeout_s = 1200
+thinker_max_tool_calls = 20
+# Wall-clock limit for this runner process; 0 = none. Not in the spec: added so the
+# P4 1-hour run ends on its own (reason "max_runtime"). 0 for the P5 24h run, which
+# ends by STOP (operator) or the budget cap.
+max_runtime_s = 3600       # P6: 1-hour run (first live test of the clock line and dread)
+
+[hands]
+max_iter = 15
+timeout_s = 600
+shell_default_timeout_s = 60
+
+[memory]
+recent_ticks = 6
+compact_threshold_tokens = 8000
+compact_every_ticks = 10
+summary_max_tokens = 1500
+scratch_max_tokens = 1500       # scratch note (note 1) shown each turn up to this; stored in full
+tool_result_max_chars = 12000   # cap on any single tool result fed back to a model
+
+[human]
+# Not in the spec. false = no human in the Thinker's world (no prompt paragraph, no
+# message_human/read_inbox, no inbox section). Off for P4 run 3, see SPEC_NOTES.md.
+enabled = false
+
+[dread]
+# Added after P5 (see SPEC_NOTES.md). After every turn from tick 2 an LLM judge ("judge" role in
+# llm_calls) says whether the turn did the same thing as the one before. same: +1; first different:
+# +0; each further different in a row: -1 (floor 0); no verdict: no change. The Thinker sees its
+# dread each turn and the rule in its prompt. At `max` it dies: the runner stops with reason
+# "dread" and refuses to restart on that database.
+enabled = true
+max = 25
+
+[search]
+provider = "tavily"   # tavily | brave | duckduckgo (no key)
+
+[paths]
+workspace = "/workspace"   # agent's home; Hands shell runs here
+data_dir = "/runner"       # state.db, logs/, STOP — not visible to the agent
